@@ -600,7 +600,7 @@
         
         <div class="educational-message">
             <h3>🎯 إرشادات إدارية مهمة:</h3>
-            <p><strong>• الأولوية للأنشطة التعليمية:</strong> فضّل الأنشطة التي تخدم أكبر عدد من الطلاب</p>
+            <p><strong>• الأولوية للأنشطة التعليمية:</strong> فضِّل الأنشطة التي تخدم أكبر عدد من الطلاب</p>
             <p><strong>• العدالة في التوزيع:</strong> احرص على إعطاء كل معلم فرصة عادلة لاستخدام الغرفة</p>
             <p><strong>• التنسيق المسبق:</strong> راجع التعارضات قبل الموافقة على الطلبات</p>
             <p><strong>• التواصل الفعال:</strong> أرسل الجدول النهائي لجميع المعلمين عبر الواتساب أو البريد الإلكتروني</p>
@@ -894,12 +894,21 @@
                     <button class="btn btn-reject" onclick="updateRequestStatus('${request.id}', 'rejected')">
                         ❌ رفض
                     </button>
+                    <button class="btn btn-details" onclick="editReservation('${request.id}')">
+                        ✏️ تعديل
+                    </button>
                     <button class="btn btn-details" onclick="showRequestDetails('${request.id}')">
                         📋 تفاصيل
                     </button>
                 </div>
             ` : `
                 <div class="action-buttons">
+                    <button class="btn btn-details" onclick="editReservation('${request.id}')">
+                        ✏️ تعديل
+                    </button>
+                    <button class="btn btn-reject" onclick="cancelReservation('${request.id}')">
+                        🗑️ إلغاء الحجز
+                    </button>
                     <button class="btn btn-details" onclick="showRequestDetails('${request.id}')">
                         📋 تفاصيل
                     </button>
@@ -982,6 +991,269 @@
             } catch (error) {
                 console.error('خطأ في تحديث الطلب:', error);
                 alert('❌ حدث خطأ في تحديث الطلب. يرجى المحاولة مرة أخرى.');
+            }
+        };
+
+        // إلغاء الحجز (التراجع)
+        window.cancelReservation = async function(requestId) {
+            if (!confirm('هل أنت متأكد من إلغاء هذا الحجز؟ سيتم حذفه نهائياً.')) {
+                return;
+            }
+
+            try {
+                await deleteDoc(doc(db, 'reservations', requestId));
+                
+                // إزالة من البيانات المحلية
+                const requestIndex = allReservations.findIndex(r => r.id === requestId);
+                if (requestIndex !== -1) {
+                    const teacherName = allReservations[requestIndex].teacherName;
+                    allReservations.splice(requestIndex, 1);
+                    alert(`✅ تم إلغاء حجز المعلم ${teacherName} بنجاح!`);
+                }
+                
+                // إعادة تحميل العرض
+                applyFilters();
+                updateStats();
+                updateScheduleView();
+                
+            } catch (error) {
+                console.error('خطأ في إلغاء الحجز:', error);
+                alert('❌ حدث خطأ في إلغاء الحجز. يرجى المحاولة مرة أخرى.');
+            }
+        };
+
+        // تعديل الحجز
+        window.editReservation = function(requestId) {
+            const request = allReservations.find(r => r.id === requestId);
+            if (!request) return;
+
+            showEditModal(request);
+        };
+
+        // إظهار نافذة التعديل
+        function showEditModal(request) {
+            const modal = document.getElementById('requestModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            modalContent.innerHTML = createEditForm(request);
+            modal.style.display = 'block';
+        }
+
+        // إنشاء نموذج التعديل
+        function createEditForm(request) {
+            const subjects = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'اجتماعيات', 
+                            'تربية إسلامية', 'تربية فنية', 'تربية بدنية', 'حاسوب', 'مهارات حياتية'];
+            
+            const activities = ['نشاط تعليمي', 'ورشة عمل', 'عرض تقديمي', 'مشروع طلابي', 
+                              'اختبار عملي', 'بحث علمي', 'تجربة معملية', 'نشاط ثقافي'];
+
+            const subjectOptions = subjects.map(subject => 
+                `<option value="${subject}" ${request.subject === subject ? 'selected' : ''}>${subject}</option>`
+            ).join('');
+
+            const activityOptions = activities.map(activity => 
+                `<option value="${activity}" ${request.activityType === activity ? 'selected' : ''}>${activity}</option>`
+            ).join('');
+
+            // إنشاء جدول اختيار الحصص
+            const scheduleGrid = createScheduleSelector(request.schedule || []);
+
+            return `
+                <form id="editReservationForm" style="line-height: 1.8;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 25px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1e88e5;">👨‍🏫 اسم المعلم:</label>
+                            <input type="text" id="editTeacherName" value="${request.teacherName}" 
+                                   style="width: 100%; padding: 12px; border: 2px solid #e8eaf6; border-radius: 8px; font-size: 14px;">
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1e88e5;">📚 المادة:</label>
+                            <select id="editSubject" style="width: 100%; padding: 12px; border: 2px solid #e8eaf6; border-radius: 8px; font-size: 14px;">
+                                ${subjectOptions}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1e88e5;">🎯 نوع النشاط:</label>
+                            <select id="editActivityType" style="width: 100%; padding: 12px; border: 2px solid #e8eaf6; border-radius: 8px; font-size: 14px;">
+                                ${activityOptions}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1e88e5;">👥 عدد المستفيدين:</label>
+                            <input type="number" id="editStudentsCount" value="${request.studentsCount || ''}" min="1" max="50"
+                                   style="width: 100%; padding: 12px; border: 2px solid #e8eaf6; border-radius: 8px; font-size: 14px;">
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #1e88e5;">📝 ملاحظات:</label>
+                        <textarea id="editNotes" rows="3" 
+                                  style="width: 100%; padding: 12px; border: 2px solid #e8eaf6; border-radius: 8px; font-size: 14px; resize: vertical;">${request.notes || ''}</textarea>
+                    </div>
+
+                    <div style="margin-bottom: 25px;">
+                        <label style="display: block; margin-bottom: 12px; font-weight: bold; color: #1e88e5;">🕐 اختيار الحصص:</label>
+                        ${scheduleGrid}
+                    </div>
+
+                    <div style="text-align: center; margin-top: 30px;">
+                        <button type="button" onclick="saveReservationChanges('${request.id}')" 
+                                style="background: #4caf50; color: white; padding: 12px 25px; border: none; border-radius: 25px; margin: 0 10px; font-weight: bold; cursor: pointer;">
+                            💾 حفظ التغييرات
+                        </button>
+                        <button type="button" onclick="closeModal()" 
+                                style="background: #757575; color: white; padding: 12px 25px; border: none; border-radius: 25px; margin: 0 10px; font-weight: bold; cursor: pointer;">
+                            ❌ إلغاء
+                        </button>
+                    </div>
+                </form>
+            `;
+        }
+
+        // إنشاء جدول اختيار الحصص
+        function createScheduleSelector(selectedSlots) {
+            const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday'];
+            const dayNames = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
+            const periods = ['1', '2', '3', '4', '5', '6', '7'];
+            const periodNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة', 'السابعة'];
+
+            let html = `
+                <div style="background: #f8f9ff; border-radius: 12px; padding: 15px; border: 1px solid #e3f2fd;">
+                    <div style="display: grid; grid-template-columns: 100px repeat(5, 1fr); gap: 2px; background: #e8eaf6; border-radius: 8px; overflow: hidden;">
+                        <div style="background: #1e88e5; color: white; padding: 8px; text-align: center; font-weight: bold; font-size: 12px;">الحصة</div>
+            `;
+
+            // رؤوس الأيام
+            dayNames.forEach(day => {
+                html += `<div style="background: #1e88e5; color: white; padding: 8px; text-align: center; font-weight: bold; font-size: 12px;">${day}</div>`;
+            });
+
+            // الحصص
+            periods.forEach((period, periodIndex) => {
+                html += `<div style="background: #1e88e5; color: white; padding: 8px; text-align: center; font-weight: bold; font-size: 12px;">${periodNames[periodIndex]}</div>`;
+                
+                days.forEach(day => {
+                    const slotId = `${day}-${period}`;
+                    const isSelected = selectedSlots.includes(slotId);
+                    const isOccupied = isSlotOccupiedByOther(slotId, selectedSlots);
+                    
+                    html += `
+                        <div style="background: white; padding: 8px; text-align: center; min-height: 40px; display: flex; align-items: center; justify-content: center;">
+                            <input type="checkbox" id="slot-${slotId}" value="${slotId}" 
+                                   ${isSelected ? 'checked' : ''} 
+                                   ${isOccupied ? 'disabled title="محجوز بواسطة معلم آخر"' : ''}
+                                   onchange="updateSelectedSlots()"
+                                   style="transform: scale(1.2); cursor: ${isOccupied ? 'not-allowed' : 'pointer'};">
+                        </div>
+                    `;
+                });
+            });
+
+            html += `
+                    </div>
+                    <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                        ✅ اختر الحصص المطلوبة | ❌ محجوز = غير متاح
+                    </div>
+                    <div id="selectedSlotsDisplay" style="margin-top: 10px; font-weight: bold; color: #1e88e5;"></div>
+                </div>
+            `;
+
+            return html;
+        }
+
+        // التحقق من حجز الحصة من قبل معلم آخر
+        function isSlotOccupiedByOther(slotId, currentRequestSlots) {
+            return allReservations.some(reservation => 
+                reservation.status === 'approved' && 
+                reservation.schedule && 
+                reservation.schedule.includes(slotId) && 
+                !currentRequestSlots.includes(slotId)
+            );
+        }
+
+        // تحديث عرض الحصص المحددة
+        window.updateSelectedSlots = function() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="slot-"]:checked');
+            const selectedSlots = Array.from(checkboxes).map(cb => cb.value);
+            
+            const display = document.getElementById('selectedSlotsDisplay');
+            if (selectedSlots.length > 0) {
+                const slotTexts = selectedSlots.map(slot => {
+                    const [day, period] = slot.split('-');
+                    const dayNames = {
+                        'sunday': 'الأحد', 'monday': 'الاثنين', 'tuesday': 'الثلاثاء',
+                        'wednesday': 'الأربعاء', 'thursday': 'الخميس'
+                    };
+                    const periodNames = {
+                        '1': 'الأولى', '2': 'الثانية', '3': 'الثالثة', '4': 'الرابعة',
+                        '5': 'الخامسة', '6': 'السادسة', '7': 'السابعة'
+                    };
+                    return `${dayNames[day]} - ${periodNames[period]}`;
+                });
+                display.innerHTML = `الحصص المحددة: ${slotTexts.join(' | ')}`;
+            } else {
+                display.innerHTML = 'لم يتم اختيار أي حصص';
+            }
+        };
+
+        // حفظ تغييرات الحجز
+        window.saveReservationChanges = async function(requestId) {
+            try {
+                const teacherName = document.getElementById('editTeacherName').value.trim();
+                const subject = document.getElementById('editSubject').value;
+                const activityType = document.getElementById('editActivityType').value;
+                const studentsCount = document.getElementById('editStudentsCount').value;
+                const notes = document.getElementById('editNotes').value.trim();
+                
+                const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="slot-"]:checked');
+                const selectedSlots = Array.from(checkboxes).map(cb => cb.value);
+
+                // التحقق من صحة البيانات
+                if (!teacherName || !subject || !activityType || selectedSlots.length === 0) {
+                    alert('❌ يرجى ملء جميع الحقول المطلوبة واختيار حصة واحدة على الأقل.');
+                    return;
+                }
+
+                // تحديث في Firebase
+                await updateDoc(doc(db, 'reservations', requestId), {
+                    teacherName,
+                    subject,
+                    activityType,
+                    studentsCount: studentsCount ? parseInt(studentsCount) : null,
+                    notes,
+                    schedule: selectedSlots,
+                    updatedAt: new Date().toISOString()
+                });
+
+                // تحديث البيانات المحلية
+                const requestIndex = allReservations.findIndex(r => r.id === requestId);
+                if (requestIndex !== -1) {
+                    allReservations[requestIndex] = {
+                        ...allReservations[requestIndex],
+                        teacherName,
+                        subject,
+                        activityType,
+                        studentsCount: studentsCount ? parseInt(studentsCount) : null,
+                        notes,
+                        schedule: selectedSlots,
+                        updatedAt: new Date().toISOString()
+                    };
+                }
+
+                // إعادة تحميل العرض
+                applyFilters();
+                updateStats();
+                updateScheduleView();
+                closeModal();
+                
+                alert(`✅ تم تحديث حجز المعلم ${teacherName} بنجاح!`);
+
+            } catch (error) {
+                console.error('خطأ في تحديث الحجز:', error);
+                alert('❌ حدث خطأ في تحديث الحجز. يرجى المحاولة مرة أخرى.');
             }
         };
 
@@ -1106,6 +1378,9 @@
             document.body.removeChild(link);
         };
 
+        function generateCSV() {
+            const headers = ['اسم المعلم', 'المادة', 'نوع النشاط', 'عدد المستفيدين', 'الحالة', 'تاريخ التقديم', 'الحصص المطلوبة', 'الملاحظات'];
+            const rows = allReservations.map(request => {
         function generateCSV() {
             const headers = ['اسم المعلم', 'المادة', 'نوع النشاط', 'عدد المستفيدين', 'الحالة', 'تاريخ التقديم', 'الحصص المطلوبة', 'الملاحظات'];
             const rows = allReservations.map(request => {
